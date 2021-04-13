@@ -1,0 +1,257 @@
+<form theme="dark">
+  <label>Help Desk - Locked Out Accounts</label>
+  <description>Select the Username that is Locked Out below to Investigate</description>
+  <fieldset submitButton="false" autoRun="true">
+    <input type="dropdown" token="user">
+      <label>Username</label>
+      <fieldForLabel>user</fieldForLabel>
+      <fieldForValue>user</fieldForValue>
+      <search>
+        <query>index=wineventlog EventCode=4625
+| dedup user
+| table user
+| sort user</query>
+        <earliest>$time.earliest$</earliest>
+        <latest>$time.latest$</latest>
+      </search>
+      <choice value="*">All</choice>
+      <default>*</default>
+      <initialValue>*</initialValue>
+    </input>
+    <input type="time" token="time" searchWhenChanged="true">
+      <label>Time Picker</label>
+      <default>
+        <earliest>-24h@h</earliest>
+        <latest>now</latest>
+      </default>
+      <change>
+        <set token="displayTime">($label$)</set>
+      </change>
+    </input>
+  </fieldset>
+  <row>
+    <panel>
+      <title>AD - Locked Out Accounts - [$time.earliest$]</title>
+      <table>
+        <search>
+          <query>index=wineventlog EventCode=4740
+| stats count by user, EventCodeDescription, Caller_Computer_Name
+| sort -count
+| rename user as Username, Caller_Computer_Name as "Computer where locked out from" EventCodeDescription as "Event Description" count as "Number of Times Locked Out"</query>
+          <earliest>$time.earliest$</earliest>
+          <latest>$time.latest$</latest>
+          <sampleRatio>1</sampleRatio>
+        </search>
+        <option name="dataOverlayMode">none</option>
+        <option name="drilldown">none</option>
+        <option name="percentagesRow">false</option>
+        <option name="rowNumbers">false</option>
+        <option name="totalsRow">false</option>
+        <option name="wrap">true</option>
+        <format type="color" field="Number of Times Locked Out">
+          <colorPalette type="minMidMax" maxColor="#DC4E41" minColor="#FFFFFF"></colorPalette>
+          <scale type="minMidMax"></scale>
+        </format>
+      </table>
+    </panel>
+    <panel>
+      <single>
+        <title>Locked Out Account Trend (Last 7 Days)</title>
+        <search>
+          <query>index=wineventlog EventCode=4740
+| timechart span=1d count</query>
+          <earliest>-7d@h</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="colorBy">trend</option>
+        <option name="colorMode">block</option>
+        <option name="drilldown">none</option>
+        <option name="height">250</option>
+        <option name="rangeColors">["0x53a051","0x0877a6","0xf8be34","0xf1813f","0xdc4e41"]</option>
+        <option name="refresh.display">progressbar</option>
+        <option name="trendColorInterpretation">inverse</option>
+        <option name="underLabel"># of Locked Out Accounts this Week</option>
+        <option name="useColors">1</option>
+      </single>
+    </panel>
+    <panel>
+      <chart>
+        <title>Locked Account Timeline (Last 7 Days)</title>
+        <search>
+          <query>index=wineventlog EventCode=4740
+| timechart count by user limit=0
+| sort -count</query>
+          <earliest>-7d@h</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="charting.chart">column</option>
+        <option name="charting.drilldown">none</option>
+      </chart>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Last 10 Failed Logons for [$user$] - Descending by Time  - [$time.earliest$]</title>
+      <table>
+        <title>Detailed Timeline of Failed Logins - If multiple IPs/Hostnames appear, Look at the Statistic Report Below</title>
+        <search>
+          <query>index=wineventlog EventCode=4625 user=$user$ 
+| table _time user, src_ip, Workstation_Name, EventCodeDescription, Failure_Reason, name
+| rename user as "Username" src_ip as "IP Address" Workstation_Name as "Workstation" EventCodeDescription as "Description" Failure_Reason as "Failure Reason" name as "Detailed Reason"
+| head 10</query>
+          <earliest>-24h@h</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="drilldown">none</option>
+        <format type="color" field="Workstation">
+          <colorPalette type="sharedList"></colorPalette>
+          <scale type="sharedCategory"></scale>
+        </format>
+        <format type="color" field="IP Address">
+          <colorPalette type="sharedList"></colorPalette>
+          <scale type="sharedCategory"></scale>
+        </format>
+        <format type="color" field="Failure Reason">
+          <colorPalette type="sharedList"></colorPalette>
+          <scale type="sharedCategory"></scale>
+        </format>
+        <format type="color" field="Detailed Reason">
+          <colorPalette type="sharedList"></colorPalette>
+          <scale type="sharedCategory"></scale>
+        </format>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Failed Logon Timeline for [$user$]  - [$time.earliest$]</title>
+      <chart>
+        <search>
+          <query>index=wineventlog EventCode=4625  name!="User name does not exist" user=$user$
+| timechart  count by user limit=0</query>
+          <earliest>$time.earliest$</earliest>
+          <latest>$time.latest$</latest>
+        </search>
+        <option name="charting.chart">column</option>
+        <option name="charting.chart.stackMode">stacked</option>
+        <option name="charting.drilldown">none</option>
+        <option name="charting.layout.splitSeries">0</option>
+        <option name="refresh.display">progressbar</option>
+      </chart>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Failed Logon Statistics for[$user$] - [$time.earliest$]</title>
+      <table>
+        <title>Investigate if User Account might be compromised with Brute-Force Password Attack - If Count is &gt; 10, escalate to Security</title>
+        <search>
+          <query>index=wineventlog EventCode=4625 user=$user$
+| stats count by user, src_ip, Workstation_Name, EventCodeDescription, Failure_Reason, name
+| rename user as "Username" src_ip as "IP Address" Workstation_Name as "Logging in From" EventCodeDescription as "Description" Failure_Reason as "Failure Reason" name as "Detailed Reason" 
+| sort -count</query>
+          <earliest>$time.earliest$</earliest>
+          <latest>$time.latest$</latest>
+          <sampleRatio>1</sampleRatio>
+        </search>
+        <option name="count">10</option>
+        <option name="dataOverlayMode">none</option>
+        <option name="drilldown">none</option>
+        <option name="percentagesRow">false</option>
+        <option name="refresh.display">progressbar</option>
+        <option name="rowNumbers">false</option>
+        <option name="totalsRow">false</option>
+        <option name="wrap">true</option>
+        <format type="color" field="user">
+          <colorPalette type="sharedList"></colorPalette>
+          <scale type="sharedCategory"></scale>
+        </format>
+        <format type="color" field="src_ip">
+          <colorPalette type="sharedList"></colorPalette>
+          <scale type="sharedCategory"></scale>
+        </format>
+        <format type="color" field="Workstation_Name">
+          <colorPalette type="sharedList"></colorPalette>
+          <scale type="sharedCategory"></scale>
+        </format>
+        <format type="color" field="Failure_Reason">
+          <colorPalette type="map">{"Account locked out.":#DC4E41,"User is Disabled.":#F8BE34,"Unknown user name or bad password.":#F1813F,"The specified user account has expired.":#AF575A}</colorPalette>
+        </format>
+        <format type="color" field="name">
+          <colorPalette type="map">{"User name does not exist":#3C444D,"User name is correct but the password is wrong":#DC4E41,"An account failed to log on":#F1813F,"Account expiration":#AF575A}</colorPalette>
+        </format>
+        <format type="color" field="count">
+          <colorPalette type="minMidMax" maxColor="#DC4E41" minColor="#FFFFFF"></colorPalette>
+          <scale type="minMidMax"></scale>
+        </format>
+        <format type="color" field="Failure Reason">
+          <colorPalette type="map">{"The user has not been granted the requested logon type at this machine.":#5A4575,"Account locked out.":#DC4E41,"Unknown user name or bad password.":#F1813F}</colorPalette>
+        </format>
+        <format type="color" field="Detailed Reason">
+          <colorPalette type="map">{"User name is correct but the password is wrong":#F1813F,"An account failed to log on":#DC4E41,"User name does not exist":#5A4575}</colorPalette>
+        </format>
+        <format type="color" field="Workstation">
+          <colorPalette type="sharedList"></colorPalette>
+          <scale type="sharedCategory"></scale>
+        </format>
+        <format type="color" field="IP Address">
+          <colorPalette type="sharedList"></colorPalette>
+          <scale type="sharedCategory"></scale>
+        </format>
+        <format type="color" field="Username">
+          <colorPalette type="sharedList"></colorPalette>
+          <scale type="sharedCategory"></scale>
+        </format>
+        <format type="color" field="Description">
+          <colorPalette type="map">{"An account failed to log on":#3C444D}</colorPalette>
+        </format>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>User and AD Admin Account Activity History  - [$time.earliest$]</title>
+      <table>
+        <search>
+          <query>index=wineventlog (EventCode=4740 OR EventCode=4624 OR EventCode=4625 OR EventCode=4767 OR EventCode=4724) user=$user$ AND user!=*$
+| table _time, src_user, user, EventCodeDescription, Failure_Reason, name, action
+| rename src_user as "AD Admin", EventCodeDescription as "Event Description", Failure_Reason as "Failure Reason", action as "Action", name as "Sub-Description", use as "Username"</query>
+          <earliest>$time.earliest$</earliest>
+          <latest>$time.latest$</latest>
+        </search>
+        <option name="drilldown">none</option>
+        <option name="refresh.display">progressbar</option>
+        <format type="color" field="Action">
+          <colorPalette type="map">{"failure":#DC4E41,"modified":#F8BE34,"success":#53A051}</colorPalette>
+        </format>
+        <format type="color" field="Event Description">
+          <colorPalette type="sharedList"></colorPalette>
+          <scale type="sharedCategory"></scale>
+        </format>
+        <format type="color" field="Failure Reason">
+          <colorPalette type="sharedList"></colorPalette>
+          <scale type="sharedCategory"></scale>
+        </format>
+        <format type="color" field="Sub-Description">
+          <colorPalette type="sharedList"></colorPalette>
+          <scale type="sharedCategory"></scale>
+        </format>
+      </table>
+    </panel>
+    <panel>
+      <title>AD Admin Unlock Events  - [$time.earliest$]</title>
+      <table>
+        <title>Ensure Locked Out Account is Unlocked by AD Admin</title>
+        <search>
+          <query>index=wineventlog EventCode=4767 user=$user$
+| table _time src_user, EventCodeDescription, user
+| rename src_user as "AD Admin" EventCodeDescription as "Event Descrition" user as "User Account Unlocked"</query>
+          <earliest>$time.earliest$</earliest>
+          <latest>$time.latest$</latest>
+        </search>
+        <option name="drilldown">none</option>
+        <option name="refresh.display">progressbar</option>
+      </table>
+    </panel>
+  </row>
+</form>
