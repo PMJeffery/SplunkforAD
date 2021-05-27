@@ -7,7 +7,7 @@
       <fieldForLabel>user</fieldForLabel>
       <fieldForValue>user</fieldForValue>
       <search>
-        <query>index=wineventlog EventCode=4625
+        <query>index=wineventlog EventCode=4740
 | dedup user
 | table user
 | sort user</query>
@@ -103,6 +103,7 @@
           <latest>now</latest>
         </search>
         <option name="drilldown">none</option>
+        <option name="refresh.display">progressbar</option>
         <format type="color" field="Workstation">
           <colorPalette type="sharedList"></colorPalette>
           <scale type="sharedCategory"></scale>
